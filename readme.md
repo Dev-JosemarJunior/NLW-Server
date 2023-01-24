@@ -1,1 +1,1 @@
-teste
+Praticing with TSX, JS, Prisma, Fastify and SQLite to build a small api to control habits assiduity.
