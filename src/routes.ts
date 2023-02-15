@@ -1,9 +1,9 @@
 import dayjs from "dayjs";
 import { FastifyInstance } from "fastify"
-import {z} from 'zod'
+import { z } from 'zod'
 import { prisma } from "./lib/prisma"
 
-export async function appRoutes(app: FastifyInstance){
+export async function appRoutes(app: FastifyInstance) {
 
   // Rota: Criar Hábito
   app.post('/habits', async (request) => {
@@ -14,7 +14,7 @@ export async function appRoutes(app: FastifyInstance){
       )
     });
 
-    const {title, weekDays} = createHabitBody.parse(request.body);
+    const { title, weekDays } = createHabitBody.parse(request.body);
     const today = dayjs().startOf('day').toDate();
 
     await prisma.habit.create({
@@ -22,12 +22,12 @@ export async function appRoutes(app: FastifyInstance){
         title,
         created_at: today,
         weekDays: {
-          create: weekDays.map( weekDay => {
+          create: weekDays.map(weekDay => {
             return {
               week_day: weekDay,
             }
           })
-        }        
+        }
       }
     })
 
@@ -45,7 +45,7 @@ export async function appRoutes(app: FastifyInstance){
     const weekDay = parsedDate.get('day');
 
     const possibleHabits = await prisma.habit.findMany({
-      where:{
+      where: {
         created_at: {
           lte: date,
         },
@@ -77,7 +77,7 @@ export async function appRoutes(app: FastifyInstance){
   })
 
   // Rota: Completar ou não hábitos
-  app.patch('/habits/:id/toggle', async (request) =>{
+  app.patch('/habits/:id/toggle', async (request) => {
     const toggleHabitParams = z.object({
       id: z.string().uuid(),
     })
@@ -90,18 +90,18 @@ export async function appRoutes(app: FastifyInstance){
         date: today,
       }
     })
-    
-    if(!day){
+
+    if (!day) {
       day = await prisma.day.create({
-        data:{
+        data: {
           date: today
         }
       })
     }
 
     const dayHabit = await prisma.dayHabit.findUnique({
-      where:{
-        day_id_habit_id:{
+      where: {
+        day_id_habit_id: {
           day_id: day.id,
           habit_id: id,
         }
@@ -109,30 +109,66 @@ export async function appRoutes(app: FastifyInstance){
     })
 
 
-    if(dayHabit){
+    if (dayHabit) {
       //Remover o check
       await prisma.dayHabit.delete({
-        where:{
+        where: {
           id: dayHabit.id
         }
       })
       return `Check no hábito ${dayHabit.habit_id} removido`;
-    }else{
+    } else {
       // Completar o Hábito no dia
       const dayHabitCreated = await prisma.dayHabit.create({
-      data:{
-        day_id: day.id,
-        habit_id: id
-      }
-    })
+        data: {
+          day_id: day.id,
+          habit_id: id
+        }
+      })
       return `Hábito de id ${dayHabitCreated.habit_id} concluído`;
     }
 
+
+  })
+
+  // Rota: Deletar hábitos
+  app.delete('/habits/:id/delete', async (request) => {
+    const deleteHabitParams = z.object({
+      id: z.string().uuid(),
+    })
+    const { id } = deleteHabitParams.parse(request.params);
+
+    if(!id){
+      return "Erro, hábito não encontrado."
+    }
     
+    await prisma.dayHabit.deleteMany({
+      where: {
+        habit_id: id
+      }
+    })
+
+    await prisma.habitWeekDays.deleteMany({
+      where: {
+        habit_id: id
+      }
+    })
+
+    const deleteHabit = await prisma.habit.delete({
+      where: {
+        id
+      },
+      select:{
+        title: true
+      }
+    })
+
+    return `Hábito "${deleteHabit.title}" deletado.`
+
   })
 
   // Rota: Resumo de dias
-  app.get('/summary',async (request) => {
+  app.get('/summary', async (request) => {
     const summary = await prisma.$queryRaw`
       SELECT 
         D.id, 
@@ -157,6 +193,8 @@ export async function appRoutes(app: FastifyInstance){
     `
     return summary;
   })
-  
+
+
+
 }
 
